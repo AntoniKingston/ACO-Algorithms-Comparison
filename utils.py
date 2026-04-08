@@ -24,6 +24,7 @@ class CVRP:
         self._parse_file(problem_name + ".vrp")
         self._parse_sol_file(problem_name + ".sol")
         self.demands = np.array(self.demands)
+        self.heuristic_solution, self.heuristic_cost = self.optimize_brute_force()
 
 
     def _parse_file(self, filepath):
@@ -165,13 +166,12 @@ class CVRP:
             f"-----------------------------"
         )
 
-    def optimize(self, optimizer, hyperparameters, save_pheromone = False, random_state = 2137):
-        random.seed(random_state)
-        np.random.seed(random_state)
-        alpha, beta, rho, n_ants, q, tol, v, rho_loc, max_iterations, eval_info_interval = hyperparameters
-        maxx = 1/(rho*self.minimal_cost)
+    def optimize(self, hyperparameters, eval_info = False, save_pheromone = False):
+        optimizer, alpha, beta, rho, n_ants, v, rho_loc, max_iterations, eval_info_interval = hyperparameters
+        q = self.heuristic_cost
+        maxx = 1/(rho*self.heuristic_cost)
         minn = maxx / 30
-        pheromone_matrix = np.random.rand(self.n, self.n)
+        pheromone_matrix = np.array([[maxx for _ in range(self.n)] for _ in range(self.n)])
         best_solutions_history = []
         pheromone_history = []
         best_cost = float('inf')
@@ -221,11 +221,8 @@ class CVRP:
             pheromone_matrix = self._update_pheromone_matrix(pheromone_matrix, solutions, solution_costs, optimizer, (rho, q, minn, maxx))
             if save_pheromone:
                 pheromone_history.append(pheromone_matrix.copy())
-            if iteration % eval_info_interval == 0 or iteration == 1:
+            if eval_info and (iteration % eval_info_interval == 0 or iteration == 1):
                 print(f"Iteration {iteration}: Best Cost = {best_cost}")
-            if best_cost < (1+tol)*self.minimal_cost:
-                print(f"Found solution in {iteration} iterations")
-                print(best_solutions_history[-1][1])
             elapsed_time = time.perf_counter() - start_time
         return OptimizationInfo(best_solutions_history, elapsed_time, pheromone_history)
 
