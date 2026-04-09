@@ -146,6 +146,8 @@ class CVRP:
         for i in range(len(self.coords)):
             for j in range(len(self.coords)):
                 self.distance_matrix[i][j] = self._distance(self.coords[i], self.coords[j], metric)
+        self.normalizaton_constant = np.max(self.distance_matrix)
+        self.distance_matrix /= self.normalizaton_constant
 
     def __str__(self):
         """Returns a formatted summary of the CVRP instance."""
@@ -188,12 +190,12 @@ class CVRP:
                 capacity_left = self.capacity
                 solution = [self.depots[0]]
                 solution_cost = 0
+                allow_unnecessary_depot_return = True
                 while (True):
                     previous_node = current_node
-                    # Fallback to depot if no available nodes
 
                     current_node = self._sample_transition_node(current_node, available_nodes, self.distance_matrix,
-                                                                pheromone_matrix, optimizer, (alpha, beta, v))
+                                                        pheromone_matrix, optimizer, (alpha, beta, v))
                     # Update solution
                     solution_cost += self.distance_matrix[previous_node][current_node]
                     if local_update:
@@ -203,10 +205,16 @@ class CVRP:
                     capacity_left -= self.demands[current_node]
                     # Update available nodes
                     unvisited_nodes = unvisited_nodes[unvisited_nodes != current_node]
-                    available_nodes = [self.depots[0]] + unvisited_nodes[self.demands[unvisited_nodes] <= capacity_left]
+                    filtered_unvisited = unvisited_nodes[self.demands[unvisited_nodes] <= capacity_left]
+                    depot_choice = np.array([self.depots[0]],
+                                            dtype=int) if allow_unnecessary_depot_return else np.array([], dtype=int)
+
+                    available_nodes = np.concatenate([depot_choice, filtered_unvisited])
                     # End solution if no trucks left
                     if current_node == self.depots[0]:
                         trucks_used += 1
+                        if allow_unnecessary_depot_return and trucks_used > 0.8 * self.n_trucks:
+                            allow_unnecessary_depot_return = False
                         available_nodes = unvisited_nodes
                         capacity_left = self.capacity
                     if trucks_used == self.n_trucks:
@@ -217,12 +225,15 @@ class CVRP:
                     solution_costs.append(solution_cost)
                     if solution_cost < best_cost:
                             best_cost = solution_cost
-                            best_solutions_history.append((solution_cost, solution, iteration))
+                            best_solutions_history.append((self.normalizaton_constant * solution_cost, solution, iteration))
+                # print(iteration, ant)
+                # print(trucks_used)
+                # print(len(solution))
             pheromone_matrix = self._update_pheromone_matrix(pheromone_matrix, solutions, solution_costs, optimizer, (rho, q, minn, maxx))
             if save_pheromone:
                 pheromone_history.append(pheromone_matrix.copy())
             if eval_info and (iteration % eval_info_interval == 0 or iteration == 1):
-                print(f"Iteration {iteration}: Best Cost = {best_cost}")
+                print(f"Iteration {iteration}: Best Cost = {best_cost * self.normalizaton_constant:.2f}")
             elapsed_time = time.perf_counter() - start_time
         return OptimizationInfo(best_solutions_history, elapsed_time, pheromone_history)
 
