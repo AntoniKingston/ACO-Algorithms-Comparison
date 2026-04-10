@@ -170,9 +170,9 @@ class CVRP:
 
     def optimize(self, hyperparameters, eval_info = False, save_pheromone = False):
         optimizer, alpha, beta, rho, n_ants, v, rho_loc, max_iterations, eval_info_interval = hyperparameters
-        q = self.heuristic_cost
-        maxx = 1/(rho*self.heuristic_cost)
+        maxx = 1/(self.n*self.heuristic_cost)
         minn = maxx / 30
+        q = self.heuristic_cost * maxx * (self.n)**(2) / 32**(2)
         pheromone_matrix = np.array([[maxx for _ in range(self.n)] for _ in range(self.n)])
         best_solutions_history = []
         pheromone_history = []
@@ -191,7 +191,11 @@ class CVRP:
                 solution = [self.depots[0]]
                 solution_cost = 0
                 allow_unnecessary_depot_return = True
-                while (True):
+                while(True):
+                    if len(unvisited_nodes) == 0:
+                        solution.append(self.depots[0])
+                        solution_cost += self.distance_matrix[current_node][self.depots[0]]
+                        break
                     previous_node = current_node
 
                     current_node = self._sample_transition_node(current_node, available_nodes, self.distance_matrix,
@@ -207,7 +211,7 @@ class CVRP:
                     unvisited_nodes = unvisited_nodes[unvisited_nodes != current_node]
                     filtered_unvisited = unvisited_nodes[self.demands[unvisited_nodes] <= capacity_left]
                     depot_choice = np.array([self.depots[0]],
-                                            dtype=int) if allow_unnecessary_depot_return else np.array([], dtype=int)
+                                            dtype=int) if (allow_unnecessary_depot_return or len(filtered_unvisited) == 0) else np.array([], dtype=int)
 
                     available_nodes = np.concatenate([depot_choice, filtered_unvisited])
                     # End solution if no trucks left
@@ -219,8 +223,7 @@ class CVRP:
                         capacity_left = self.capacity
                     if trucks_used == self.n_trucks:
                         break
-
-                if len(solution) == self.n + self.n_trucks:
+                if len(unvisited_nodes) == 0:
                     solutions.append(solution)
                     solution_costs.append(solution_cost)
                     if solution_cost < best_cost:
@@ -271,8 +274,6 @@ class CVRP:
     def _sample_transition_node(self, current_node, available_nodes, distance_matrix, pheromone_matrix, optimizer, hyperparameters):
         transition_method = CVRP._opt2transmethod(optimizer)
         alpha, beta, v = hyperparameters
-        if current_node != self.depots[0]:
-            available_nodes = np.append(self.depots, available_nodes)
         # print(available_nodes)
         if transition_method == "PRPR":
             if v < np.random.rand():
@@ -288,7 +289,13 @@ class CVRP:
             print(pheromone_matrix[current_node][available_nodes])
             print(probabilities)
             raise Exception(f"Nans in probabilities")
-
+        if len(available_nodes) == 0:
+            print(current_node)
+            print(available_nodes)
+            print(distance_matrix[current_node][available_nodes])
+            print(pheromone_matrix[current_node][available_nodes])
+            print(probabilities)
+            raise Exception(f"No available nodes")
         return np.random.choice(available_nodes, p=probabilities)
 
     def _update_pheromone_matrix(self, pheromone_matrix, solutions, solution_costs, optimizer, hyperparameters):
