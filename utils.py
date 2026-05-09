@@ -269,7 +269,7 @@ class CVRP:
             # Update available nodes
             unvisited_nodes = unvisited_nodes[unvisited_nodes != current_node]
             available_nodes = unvisited_nodes[self.demands[unvisited_nodes] <= capacity_left]
-        return (solution, solution_cost)
+        return (solution, solution_cost * self.normalizaton_constant)
 
     def _sample_transition_node(self, current_node, available_nodes, distance_matrix, pheromone_matrix, optimizer, hyperparameters):
         transition_method = CVRP._opt2transmethod(optimizer)
